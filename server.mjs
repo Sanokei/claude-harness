@@ -20,6 +20,26 @@ import crypto from 'node:crypto';
 const PORT = 8080;
 const QUEUE = new URL('./queue/', import.meta.url).pathname;
 
+// Bearer token auth: the endpoint defines its own token.
+// Claude Code sends it as ANTHROPIC_AUTH_TOKEN; we validate it here.
+import { readFileSync } from 'node:fs';
+let EXPECTED_TOKEN = '';
+try {
+  EXPECTED_TOKEN = readFileSync(new URL('./.bearer_token', import.meta.url), 'utf8').trim();
+} catch {}
+
+function checkAuth(req, res) {
+  const header = req.headers['authorization'] || '';
+  const apiKey = req.headers['x-api-key'] || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : apiKey;
+  if (!EXPECTED_TOKEN || token !== EXPECTED_TOKEN) {
+    res.writeHead(401, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'invalid bearer token' } }));
+    return false;
+  }
+  return true;
+}
+
 function sendSSE(res, message) {
   const write = (event, data) => {
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
@@ -88,6 +108,8 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({ ok: true }));
     return;
   }
+  // All API routes require the bearer token.
+  if (!checkAuth(req, res)) return;
   if (req.method === 'GET' && req.url.startsWith('/v1/models')) {
     // Model list for client-side validation. Advertise a broad set.
     const models = ['claude-opus-5-5','claude-sonnet-5-5','claude-haiku-5-5',
