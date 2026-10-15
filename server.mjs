@@ -127,7 +127,7 @@ const server = http.createServer((req, res) => {
     }
     return;
   }
-  if (req.method === 'POST' && req.url === '/v1/messages') {
+  if (req.method === 'POST' && req.url.split('?')[0] === '/v1/messages') {
     let body = '';
     req.on('data', c => { body += c; });
     req.on('end', async () => {
